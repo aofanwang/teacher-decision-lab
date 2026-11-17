@@ -1,85 +1,147 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { createRoot } from 'react-dom/client';
+import LessonActivity from './lesson-activity';
+import { canOpen, firstPending, freshLesson, progress, screenFromHash, type LessonState, type Screen } from './lesson-state';
 import './style.css';
 
 const portfolio = 'https://aofanwang.github.io/projects/teacher-decision-lab';
-const screens = ['Welcome', 'Learning journey', 'Scenario introduction'] as const;
-const classroom = import.meta.env.BASE_URL + 'classroom.jpg';
+const title = 'Teacher Decision Lab';
+const lesson = 'Navigating Classroom Conflict';
+const asset = (file: string) => import.meta.env.BASE_URL + file;
+
+const iconPaths = {
+  book: 'M12 6v15M12 6C9 4 5 4 2 5v14c3-1 7-1 10 2 3-3 7-3 10-2V5c-3-1-7-1-10 1Z',
+  clock: 'M12 7v5l4 3M22 12a10 10 0 1 1-20 0 10 10 0 0 1 20 0Z',
+  menu: 'M3 6h18M3 12h18M3 18h18',
+  close: 'm6 6 12 12M18 6 6 18',
+  collapse: 'm15 6-6 6 6 6',
+  right: 'M3 12h17m-7-7 7 7-7 7',
+  left: 'M21 12H4m7-7-7 7 7 7',
+  check: 'm5 12 4 4L19 6',
+  external: 'M13 4h7v7m0-7-9 9m5 0v7H4V8h7',
+  exit: 'M10 4H4v16h6m-1-8h12m-4-4 4 4-4 4',
+};
+
+function Icon({ name }: { name: keyof typeof iconPaths }) {
+  return <svg className="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.65" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d={iconPaths[name]} /></svg>;
+}
+
+function CourseLanding({ start }: { start: () => void }) {
+  return <>
+    <header className="cover-header"><span>{title}</span><a href={portfolio}>Back to Portfolio <Icon name="external" /></a></header>
+    <main id="content" className="cover enter" tabIndex={-1}>
+      <p className="eyebrow cover-eyebrow">Professional Development</p>
+      <h1>{title}</h1>
+      <p className="tagline">Practice the decisions behind teaching.</p>
+      <img className="panorama cover-image" src={asset('course-cover.jpg')} alt="A preschool teacher observing children as they build with wooden blocks." width={2079} height={756} />
+      <p className="description">Step into realistic classroom situations, explore different ways to respond, and develop your professional judgment through practice and reflection.</p>
+      <ul className="facts"><li><Icon name="book" />1 lesson</li><li><Icon name="clock" />Self-paced</li></ul>
+      <button className="primary start" type="button" onClick={start}>Start Course <Icon name="right" /></button>
+      <p className="audience">Designed for early childhood educators</p>
+    </main>
+  </>;
+}
+
+function CourseProgress({ completion }: { completion: number }) {
+  return <div className="course-progress">
+    <progress value={completion} max={100} aria-label="Course completion" />
+    <p className="eyebrow">{completion}% Complete</p>
+  </div>;
+}
+
+function CourseSidebar({ open, close, openLesson, completion }: { open: boolean; close: () => void; openLesson: () => void; completion: number }) {
+  return <aside id="course-sidebar" className="sidebar" hidden={!open} aria-label="Course outline">
+    <button className="icon-button collapse" type="button" aria-label="Collapse course sidebar" onClick={close}><Icon name="collapse" /></button>
+    <p className="sidebar-title">{title}</p>
+    <CourseProgress completion={completion} />
+    <nav className="lesson-nav" aria-label="Lessons">
+      <p className="eyebrow">Lessons</p>
+      <button className="lesson-item" type="button" aria-current="true" onClick={openLesson}><span className="eyebrow">Lesson 01</span>{lesson}</button>
+    </nav>
+  </aside>;
+}
+
+function ClassroomImage() {
+  return <img className="panorama lesson-image" src={asset('classroom-conflict.jpg')} alt="Two preschool children holding the same wooden toy truck while a teacher observes nearby." width={2137} height={736} />;
+}
+
+function LessonIntroduction({ begin }: { begin: () => void }) {
+  return <>
+    <p className="eyebrow">Lesson 1 of 1</p>
+    <h1>{lesson}</h1>
+    <ClassroomImage />
+    <p>Conflict is a natural part of children's social development. But in the moment, deciding how to intervene is not always straightforward.</p>
+    <h2>What you'll learn</h2>
+    <ul className="objectives">
+      {['Distinguish observable facts from assumptions in a classroom conflict.', "Compare teaching responses based on children's developmental and emotional needs.", 'Justify and adapt a teaching response when new contextual information becomes available.'].map(text => <li key={text}><span className="check"><Icon name="check" /></span>{text}</li>)}
+    </ul>
+    <button className="primary" type="button" onClick={begin}>Begin Scenario <Icon name="right" /></button>
+  </>;
+}
+
+function CoursePlayer({ children, exit, openLesson, screen, completion }: { children: ReactNode; exit: () => void; openLesson: () => void; screen: Screen; completion: number }) {
+  const [open, setOpen] = useState(() => !matchMedia('(max-width: 800px)').matches);
+  const toggle = useRef<HTMLButtonElement>(null);
+  function close() {
+    setOpen(false);
+    toggle.current?.focus();
+  }
+  return <div className="player" onKeyDown={event => {
+    if (event.key === 'Escape' && open) close();
+  }}>
+    <header className="player-header">
+      <button ref={toggle} className="icon-button" type="button" aria-label={open ? 'Hide course sidebar' : 'Show course sidebar'} aria-expanded={open} aria-controls="course-sidebar" onClick={() => setOpen(value => !value)}><Icon name="menu" /></button>
+      <span>{title}</span>
+      <button className="exit" type="button" onClick={exit}>Exit Course <Icon name="exit" /></button>
+    </header>
+    <div className={open ? 'player-layout sidebar-open' : 'player-layout'}>
+      <CourseSidebar open={open} close={close} completion={completion} openLesson={() => {
+        if (matchMedia('(max-width: 800px)').matches) close();
+        openLesson();
+      }} />
+      <main id="content" className="lesson-content" tabIndex={-1}><div className="lesson-inner enter" key={screen}>{children}</div></main>
+    </div>
+  </div>;
+}
 
 function Course() {
-  const [step, setStep] = useState(0);
-  const heading = useRef<HTMLHeadingElement>(null);
-  const changed = useRef(false);
+  const [state, setState] = useState(freshLesson);
+  const [screen, setScreen] = useState(() => screenFromHash(location.hash, state));
+  const latest = useRef(state);
+  latest.current = state;
+  const moved = useRef(false);
   useEffect(() => {
-    if (changed.current) heading.current?.focus();
-  }, [step]);
+    const update = () => { moved.current = true; setScreen(screenFromHash(location.hash, latest.current)); };
+    window.addEventListener('popstate', update);
+    return () => window.removeEventListener('popstate', update);
+  }, []);
+  useEffect(() => {
+    if (!moved.current) return;
+    document.getElementById('content')?.focus({ preventScroll: true });
+    window.scrollTo(0, 0);
+  }, [screen]);
 
-  function goTo(next: number) {
-    if (next < 0 || next >= screens.length || next === step) return;
-    changed.current = true;
-    setStep(next);
+  function go(next: Screen, updated: LessonState = state) {
+    if (!canOpen(next, updated)) return;
+    setState(updated);
+    if (next === screen) return;
+    history.pushState(null, '', next === 'landing' ? location.pathname + location.search : '#' + next);
+    moved.current = true;
+    setScreen(next);
   }
 
   return <>
-    <a className="skip" href="#lesson">Skip to lesson</a>
-    <header className="shell header"><span>Teacher Decision Lab</span><a href={portfolio}><span aria-hidden="true">↖</span> Back to Portfolio</a></header>
-    <main id="lesson" className="shell">
-      <nav aria-label="Lesson progress">
-        <ol className="progress">{screens.map((label, index) => (
-          <li key={label}><button type="button" aria-current={step === index ? 'step' : undefined} onClick={() => goTo(index)}>
-            <span className="number" aria-hidden="true">0{index + 1}</span>{label}
-          </button></li>
-        ))}</ol>
-      </nav>
-
-      {step === 0 ? <>
-        <section className="split" aria-labelledby="screen-title">
-          <div>
-            <p className="eyebrow">WELCOME TO THE LAB</p>
-            <h1 id="screen-title" ref={heading} tabIndex={-1}>Teaching isn't always about knowing the answer.</h1>
-            <p className="deck">It's about knowing how to respond.</p>
-            <p>Real classrooms are unpredictable. Children have different needs, emotions, and experiences, and the same strategy may not work in every situation.</p>
-            <p>Teacher Decision Lab is a scenario-based learning experience designed to help new preschool teachers practice decisions before facing similar moments in the classroom.</p>
-          </div>
-          <img src={classroom} alt="" width="1536" height="1024" />
-        </section>
-        <dl className="facts">
-          <div><dt>Audience</dt><dd>Novice preschool teachers</dd></div>
-          <div><dt>Format</dt><dd>Self-paced scenario practice</dd></div>
-          <div><dt>Scope</dt><dd>One classroom case</dd></div>
-        </dl>
-      </> : step === 1 ? (
-        <section className="reading" aria-labelledby="screen-title">
-          <h1 id="screen-title" ref={heading} tabIndex={-1}>Your learning journey</h1>
-          <h2>Learning objectives</h2>
-          <ol className="objectives">
-            <li>Recognize relevant information before making a classroom decision.</li>
-            <li>Compare possible responses and explain their trade-offs.</li>
-            <li>Adapt an approach when new contextual information becomes available.</li>
-          </ol>
-          <h2>How it works</h2>
-          <p>You'll encounter a classroom situation, choose how to respond, explore possible consequences, and reconsider your decision. At the end, you'll reflect on what you might apply in your own teaching.</p>
-          <aside className="callout"><p>This is a learning space, not a performance test. Some decisions have multiple reasonable approaches, but children's safety and well-being always come first.</p></aside>
-        </section>
-      ) : (
-        <section className="split" aria-labelledby="screen-title">
-          <div>
-            <p className="eyebrow">SCENARIO 01 · CLASSROOM CONFLICT</p>
-            <h1 id="screen-title" ref={heading} tabIndex={-1}>One toy. Two perspectives.</h1>
-            <p>It's a busy morning in a preschool classroom. Two children are playing near the same shelf when a disagreement begins.</p>
-            <p>Both children can communicate verbally. Each says they had the toy first. You're nearby, but you didn't see who was using it before the conflict.</p>
-            <aside className="callout"><h2>Pause and reflect</h2><p>What do you know for certain? What information might you still need?</p></aside>
-          </div>
-          <img src={classroom} alt="Editorial illustration of two children near a low classroom shelf with a toy between them." width="1536" height="1024" />
-        </section>
-      )}
-
-      <div className="controls">
-        {step > 0 && <button type="button" onClick={() => goTo(step - 1)}><span aria-hidden="true">←</span> Back</button>}
-        {step < 2 && <button className="primary" type="button" onClick={() => goTo(step + 1)}>{step === 0 ? 'Continue' : 'Enter the Classroom'} <span aria-hidden="true">→</span></button>}
-      </div>
-      <footer>{step === 2 ? 'This preview ends before the decision activity.' : 'Teacher Decision Lab · Course preview'}</footer>
-    </main>
+    <a className="skip" href="#content" onClick={event => {
+      event.preventDefault();
+      document.getElementById('content')?.focus();
+    }}>Skip to content</a>
+    {screen === 'landing' ? <CourseLanding start={() => go('lesson')} /> :
+      <CoursePlayer screen={screen} completion={progress(state)} exit={() => go('landing')} openLesson={() => go('lesson')}>
+        {screen === 'lesson' ? <LessonIntroduction begin={() => go(firstPending(state))} /> :
+          <LessonActivity key={screen} screen={screen} state={state} setState={setState} go={go} restart={() => {
+            if (window.confirm('Restart Lesson 01? This clears your choices, notes, and progress in this tab.')) go('scenario', freshLesson());
+          }} />}
+      </CoursePlayer>}
   </>;
 }
 
